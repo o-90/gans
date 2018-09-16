@@ -51,7 +51,12 @@ class Train:
           axis=0)
         
         # latent space
-        z = tf.random_normal(shape=[self.config.batch_size, 128], name="z")
+        zs = tf.random_normal(
+          shape=[self.config.batch_size * self.config.num_devices, 128], name="z")
+        zs = tf.split(
+          zs,
+          num_or_size_splits=self.config.num_devices,
+          axis=0)
 
       d_opt = tf.train.AdamOptimizer(
         learning_rate=self.config.d_lr, beta1=self.config.beta1, beta2=self.config.beta2)
@@ -66,7 +71,7 @@ class Train:
 
       reuse_vars = None
 
-      for idx, (train_imgs, device) in enumerate(zip(train_images, self.config.devices)):
+      for idx, (train_imgs, z, device) in enumerate(zip(train_images, zs, self.config.devices)):
         with tf.device(f"{device}"):
           with tf.name_scope(f"device_{idx}"):
             with tf.variable_scope(tf.get_variable_scope(), reuse=reuse_vars):
@@ -75,9 +80,6 @@ class Train:
       
               _, Dx, _ = disc(input_layer=train_imgs)
               _, D_Gz, _ = disc(input_layer=Gz, reuse=True)
-      
-              # d_loss = tf.reduce_mean(tf.nn.softplus(-Dx) + tf.nn.softplus(D_Gz))
-              # g_loss = tf.reduce_mean(tf.nn.softplus(-D_Gz))
       
               d_loss_real = tf.nn.sigmoid_cross_entropy_with_logits(
                 logits=Dx,
@@ -118,19 +120,6 @@ class Train:
 
       # initialize all variables
       self.init_op = tf.global_variables_initializer()
-
-    '''# --- validation ---
-    valid_images, _ = data.get_data(data="valid")
-    valid_z = tf.random_normal([c.batch_size, 128])
-
-    # gen for fid score
-    Gz_valid = gen(z=valid_z, reuse=True)
-    
-    # disc
-    real_prob_op, _, real_activ = disc(input_layer=valid_images, reuse=True)
-    fake_prob_op, _, fake_activ = disc(input_layer=Gz_valid, reuse=True)
-
-    fid_op = utils._frechet_dist(real_activ, fake_activ)'''
 
   def train(self):
     self._build()
