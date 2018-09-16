@@ -22,23 +22,12 @@ from gans.networks.cifar10.network import gen
 
 class Train:
   def __init__(self, config, data):
-    self._config =  config
     self._data = data
+    self.config = config
     self.graph = tf.Graph()
-    self.devices = ["/gpu:0", "/gpu:1"]
-    self.num_devices = len(self.devices)
-    self.params = {
-      "batch_size": 32,
-      "num_devices": self.num_devices,
-      "num_epochs": 100000,
-    }
-
-    self._setup()
-
-  def _setup(self):
-    self.config = self._config(**self.params)
     self.data = self._data(self.config)
 
+  #TODO(gobrewers14): move to utils
   @staticmethod
   def _avg_grads(tower_grads):
     average_grads = []
@@ -56,7 +45,10 @@ class Train:
       with tf.device("/cpu:0"):
         # images
         train_images, _ = self.data.get_data()
-        train_images = tf.split(train_images, num_or_size_splits=self.num_devices, axis=0)
+        train_images = tf.split(
+          train_images,
+          num_or_size_splits=self.config.num_devices,
+          axis=0)
         
         # latent space
         z = tf.random_normal(shape=[self.config.batch_size, 128], name="z")
@@ -74,7 +66,7 @@ class Train:
 
       reuse_vars = None
 
-      for idx, (train_imgs, device) in enumerate(zip(train_images, self.devices)):
+      for idx, (train_imgs, device) in enumerate(zip(train_images, self.config.devices)):
         with tf.device(f"{device}"):
           with tf.name_scope(f"device_{idx}"):
             with tf.variable_scope(tf.get_variable_scope(), reuse=reuse_vars):
@@ -164,74 +156,32 @@ class Train:
           update_str = f"update: {i}\n"
           update_str += f"\td_loss:\t{np.mean(d_train_losses):.3f} ± {np.std(d_train_losses):.3f}\n"
           update_str += f"\tg_loss:\t{np.mean(g_train_losses):.3f} ± {np.std(g_train_losses):.3f}\n"
-          update_str += f"\ttime:\t\t{datetime.now()-start_time}\n"
+          update_str += f"\ttime:\t{datetime.now()-start_time}\n"
           update_str += "-" * 79
           print(update_str)
 
 
-if __name__ == "__main__":
-  
-  t = Train(config=Config, data=Cifar10Data)
-  t.train()
-
-  '''
-  # else:
-  #   _ = sess.run(d_train_op)
-
-  d_train_loss, g_train_loss = sess.run([d_loss, g_loss])
-
-  d_train_losses.append(d_train_loss)
-  g_train_losses.append(g_train_loss)
-
-  if i % 5000 == 0:
-    real_probs = []
-    fake_probs = []
-    fids = []
-    print("validating...")
-    for _ in range(500):
-      # check probabilities
-      real_prob, fake_prob = sess.run([real_prob_op, fake_prob_op])
-      real_probs.append(real_prob)
-      fake_probs.append(fake_prob)
-    
-      # check distribution
-      batch_fid_score = sess.run(fid_op)
-      fids.append(batch_fid_score)
-  
-    # plot sample generated images to check progress
-    sample_images = sess.run(Gz_valid)
-    utils._make_sample_images(sample_images, i)
-
-    real_probs = np.stack(real_probs)
-    fake_probs = np.stack(fake_probs)
-    real_diff = utils._binary_argmax(real_probs) == np.ones_like(real_probs)
-    fake_diff = utils._binary_argmax(fake_probs) == np.zeros_like(fake_probs)
-    acc = (np.c_[real_diff, fake_diff]).mean()
-    mean_fid = np.mean(np.stack(fids))
-    sd_fid = np.std(np.stack(fids))
-
-    update_str = f"update: {i}\n"
-    update_str += f"\td_loss:\t\t{np.mean(d_train_losses):.3f} +/- {np.std(d_train_losses):.3f}\n"
-    update_str += f"\tg_loss:\t\t{np.mean(g_train_losses):.3f} +/- {np.std(g_train_losses):.3f}\n"
-    update_str += f"\tvalid acc:\t{acc:.3f}\n"
-    update_str += f"\treal/fake:\t{real_diff.mean():.3f} / {fake_diff.mean():.3f}\n"
-    update_str += f"\tvalid fid:\t{mean_fid:.2f} +/- {sd_fid:.2f}\n"
-    update_str += f"\ttime:\t\t{datetime.now()-start_time}\n"
-    update_str += "-" * 79
-    print(update_str)
-
-    d_train_losses = []
-    g_train_losses = []
-
-
 def parse_args(parser):
-parser.add_argument("--batch-size", type=int, dest="batch_size", default=32)
-parser.add_argument("--num-epochs", type=int, dest="num_epochs", default=100000)
-options = parser.parse_args()
-return options
+  parser.add_argument("--batch-size", type=int, dest="batch_size", default=32)
+  parser.add_argument("--num-epochs", type=int, dest="num_epochs", default=100000)
+  parser.add_argument("--devices", type=list, dest="devices", default=["/gpu:0", "/gpu:1"])
+  options = parser.parse_args()
+  return options
+
+
+def main(options):
+  params = {
+    "batch_size": options.batch_size,
+    "num_epochs": options.num_epochs,
+    "devices": options.devices,
+  }
+
+  config = Config(**params)
+  trainer = Train(config=config, data=Cifar10Data)
+  trainer.train()
 
 
 if __name__ == "__main__":
-parser = ArgumentParser(description="")
-options = parse_args(parser)
-main(options)'''
+  parser = ArgumentParser(description="")
+  options = parse_args(parser)
+  main(options)

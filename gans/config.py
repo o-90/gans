@@ -18,7 +18,7 @@ class Config:
                model_dir="/data/working/vagrant/models",
                batch_size=64,
                num_epochs=100000,
-               num_devices=1,
+               devices=["/gpu:0"],
                buffer_size=1024,
                beta1=0.0,
                beta2=0.9,
@@ -40,7 +40,8 @@ class Config:
     # tensorflow constants
     self.batch_size = batch_size
     self.num_epochs = num_epochs
-    self.num_devices = num_devices
+    self.devices = devices
+    self.num_devices = len(self.devices)
     self.buffer_size = buffer_size
     self.d_lr = d_lr
     self.g_lr = g_lr
